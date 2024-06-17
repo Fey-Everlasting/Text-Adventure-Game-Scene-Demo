@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Generate Normal Map</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background-color: #222;
+            color: #fff;
+        }
+        canvas {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Generate Normal Map</h1>
+    <input type="file" id="upload" accept="image/png">
+    <canvas id="canvas"></canvas>
+    <script>
+        document.getElementById('upload').addEventListener('change', handleUpload);
+
+        function handleUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    const data = imageData.data;
+
+                    for (let y = 0; y < img.height; y++) {
+                        for (let x = 0; x < img.width; x++) {
+                            const index = (y * img.width + x) * 4;
+                            const r = data[index];
+                            const g = data[index + 1];
+                            const b = data[index + 2];
+
+                            let nx, ny, nz;
+
+                            if (r < 128 && g < 128 && b < 128) {
+                                // 黑色区域表示需要抖动的区域，法线指向上方
+                                nx = 0;
+                                ny = 0;
+                                nz = 1;
+                            } else {
+                                // 白色区域表示不需要抖动的区域，法线指向前方
+                                nx = 0;
+                                ny = 1;
+                                nz = 0;
+                            }
+
+                            // 将法线分量转换为颜色值
+                            data[index] = Math.floor((nx + 1) * 127.5);
+                            data[index + 1] = Math.floor((ny + 1) * 127.5);
+                            data[index + 2] = Math.floor((nz + 1) * 127.5);
+                        }
+                    }
+
+                    ctx.putImageData(imageData, 0, 0);
+
+                    // 下载生成的法线贴图
+                    const link = document.createElement('a');
+                    link.download = 'normal_map.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.textContent = 'Download Normal Map';
+                    document.body.appendChild(link);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    </script>
+</body>
+</html>

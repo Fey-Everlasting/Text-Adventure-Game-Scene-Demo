@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Text-based Game Layout</title>
+    <style>
+        @font-face {
+            font-family: 'Pixica Mono';
+            src: url('assets/PixicaMono-Bold.woff2') format('woff2'),
+                url('assets/PixicaMono-Bold.woff') format('woff');
+            font-weight: bold;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            background-color: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #startButton {
+            font-family: 'Pixica Mono';
+            font-weight: bold;
+            color: white;
+            font-size: 48px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="startButton">START</div>
+
+    <script>
+        document.body.addEventListener('mousedown', function() {
+            // 初始化音频上下文
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const bgmAudio = new Audio('assets/tavern.m4a');
+            bgmAudio.loop = true;
+            bgmAudio.volume = 0.3; // 设置背景音乐音量
+            const bgmSource = audioContext.createMediaElementSource(bgmAudio);
+            bgmSource.connect(audioContext.destination);
+            bgmAudio.play().catch(() => {
+                document.addEventListener('mousedown', () => {
+                    audioContext.resume();
+                    bgmAudio.play();
+                }, { once: true });
+            });
+
+            // 保存音频初始化状态
+            localStorage.setItem('audioInitialized', 'true');
+            localStorage.setItem('bgmPlaying', 'true');
+
+            window.location.href = 'scene.html';
+        });
+    </script>
+</body>
+</html>

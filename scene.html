@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Text-based Game Layout</title>
+    <link rel="icon" href="data:,">
+    <style>
+        @font-face {
+            font-family: 'Pixica Mono';
+            src: url('assets/PixicaMono-Bold.woff2') format('woff2'),
+                url('assets/PixicaMono-Bold.woff') format('woff');
+            font-weight: bold;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Pixica Mono';
+            src: url('assets/PixicaMono-Regular.woff2') format('woff2'),
+                url('assets/PixicaMono-Regular.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            background-color: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-width: 1200px;
+            min-height: 800px;
+            overflow: hidden;
+        }
+
+        #mainCanvas {
+            position: relative;
+            width: 1024px;
+            height: 768px;
+            background-color: black;
+        }
+
+        #sceneCanvas {
+            position: absolute;
+            top: 48px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 720px;
+            height: 380px;
+            image-rendering: pixelated;
+        }
+
+        #npcCanvas {
+            position: absolute;
+            bottom: 48px;
+            left: 40px;
+            width: 190px;
+            height: 250px;
+            box-sizing: border-box;
+            background-color: black;
+        }
+
+        #dialogueCanvas {
+            position: absolute;
+            bottom: 48px;
+            left: 260px;
+            width: calc(100% - 300px);
+            height: 250px;
+            box-sizing: border-box;
+            background-color: black;
+        }
+
+        #scanlineCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body>
+    <div id="mainCanvas">
+        <canvas id="sceneCanvas"></canvas>
+        <canvas id="npcCanvas"></canvas>
+        <canvas id="dialogueCanvas"></canvas>
+        <canvas id="scanlineCanvas"></canvas>
+    </div>
+    <script id="vertex-shader" type="x-shader/x-vertex">
+        attribute vec4 aVertexPosition;
+        attribute vec2 aTextureCoord;
+        varying highp vec2 vTextureCoord;
+
+        void main(void) {
+            gl_Position = aVertexPosition;
+            vTextureCoord = vec2(aTextureCoord.x, 1.0 - aTextureCoord.y); // Flip y coordinate
+        }
+    </script>
+    <script id="fragment-shader" type="x-shader/x-fragment">
+        precision highp float;
+        varying highp vec2 vTextureCoord;
+        uniform sampler2D uSampler;
+        uniform sampler2D uNormalMap;
+        uniform float uTime;
+        uniform bool uGreenChannelJitter;
+
+        float random(vec2 co) {
+            return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+        }
+
+        void main(void) {
+            vec4 texColor = texture2D(uSampler, vTextureCoord);
+            vec4 normalColor = texture2D(uNormalMap, vTextureCoord);
+            vec2 pos = vTextureCoord * vec2(720.0, 380.0);
+            vec2 jitter = vec2(0.0, 0.0);
+
+            if (normalColor.g <= 0.5) {
+                float offsetX = floor(sin(uTime * random(pos) * 10.0) * 1.0);
+                float offsetY = floor(cos(uTime * random(pos) * 10.0) * 1.0);
+                jitter = vec2(offsetX, offsetY) / vec2(720.0, 380.0);
+            } else if (uGreenChannelJitter) {
+                float offsetX = floor(sin(uTime * random(pos) * 2.0) * 0.5);
+                float offsetY = floor(cos(uTime * random(pos) * 2.0) * 0.5);
+                jitter = vec2(offsetX, offsetY) / vec2(720.0, 380.0);
+            }
+
+            vec2 newPos = vTextureCoord + jitter;
+            texColor = texture2D(uSampler, newPos);
+            gl_FragColor = texColor;
+        }
+    </script>
+    <script src="scene.js"></script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dithering Effect</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 0 auto;
+        }
+        .slider-container {
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="upload" accept="image/*">
+    <div class="slider-container">
+        <label for="threshold">Threshold: <span id="thresholdValue">128</span></label>
+        <input type="range" id="threshold" min="0" max="255" value="128">
+        <input type="number" id="thresholdInput" min="0" max="255" value="128">
+    </div>
+    <div class="slider-container">
+        <label for="ditherLevel">Dither Level: <span id="ditherValue">16</span></label>
+        <input type="range" id="ditherLevel" min="8" max="32" step="8" value="16">
+        <input type="number" id="ditherInput" min="8" max="32" step="8" value="16">
+    </div>
+    <div class="slider-container">
+        <label for="pixelSize">Pixel Size: <span id="pixelSizeValue">1</span>x</label>
+        <input type="range" id="pixelSize" min="1" max="4" value="1">
+        <input type="number" id="pixelInput" min="1" max="4" value="1">
+    </div>
+    <button id="applyButton">Apply</button>
+    <canvas id="canvas"></canvas>
+    <script>
+        let originalImage = null;
+
+        document.getElementById('upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    originalImage = img;
+                    updateCanvas();
+                }
+                img.src = event.target.result;
+            }
+
+            reader.readAsDataURL(file);
+        });
+
+        function synchronizeInputs(slider, input, valueElement) {
+            slider.addEventListener('input', function() {
+                input.value = slider.value;
+                valueElement.textContent = slider.value;
+                updateCanvas();
+            });
+
+            input.addEventListener('input', function() {
+                slider.value = input.value;
+                valueElement.textContent = input.value;
+                updateCanvas();
+            });
+        }
+
+        synchronizeInputs(document.getElementById('threshold'), document.getElementById('thresholdInput'), document.getElementById('thresholdValue'));
+        synchronizeInputs(document.getElementById('ditherLevel'), document.getElementById('ditherInput'), document.getElementById('ditherValue'));
+        synchronizeInputs(document.getElementById('pixelSize'), document.getElementById('pixelInput'), document.getElementById('pixelSizeValue'));
+
+        function updateCanvas() {
+            if (!originalImage) return;
+
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const threshold = parseInt(document.getElementById('threshold').value);
+            const ditherLevel = parseInt(document.getElementById('ditherLevel').value);
+            const pixelSize = parseInt(document.getElementById('pixelSize').value);
+
+            const width = originalImage.width;
+            const height = originalImage.height;
+
+            canvas.width = width;
+            canvas.height = height;
+
+            ctx.drawImage(originalImage, 0, 0, width, height);
+            applyDithering(ctx, width, height, threshold, ditherLevel, pixelSize);
+        }
+
+        function applyDithering(ctx, width, height, threshold, ditherLevel, pixelSize) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            const ditherMatrix = createDitherMatrix(ditherLevel);
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const index = (y * width + x) * 4;
+                    const oldPixel = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
+                    const newPixel = oldPixel < threshold ? 0 : 255;
+                    data[index] = data[index + 1] = data[index + 2] = newPixel;
+                    const quantError = oldPixel - newPixel;
+
+                    for (let i = 0; i < ditherMatrix.length; i++) {
+                        const dx = ditherMatrix[i][0];
+                        const dy = ditherMatrix[i][1];
+                        const weight = ditherMatrix[i][2];
+                        if (x + dx >= 0 && x + dx < width && y + dy >= 0 && y + dy < height) {
+                            const newIndex = ((y + dy) * width + (x + dx)) * 4;
+                            data[newIndex] = clampColor(data[newIndex] + quantError * weight);
+                            data[newIndex + 1] = clampColor(data[newIndex + 1] + quantError * weight);
+                            data[newIndex + 2] = clampColor(data[newIndex + 2] + quantError * weight);
+                        }
+                    }
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+            for (let y = 0; y < height; y += pixelSize) {
+                for (let x = 0; x < width; x += pixelSize) {
+                    const index = (y * width + x) * 4;
+                    const gray = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
+                    const finalPixel = gray < threshold ? 0 : 255;
+                    for (let dy = 0; dy < pixelSize; dy++) {
+                        for (let dx = 0; dx < pixelSize; dx++) {
+                            if (y + dy < height && x + dx < width) {
+                                const pixelIndex = ((y + dy) * width + (x + dx)) * 4;
+                                data[pixelIndex] = data[pixelIndex + 1] = data[pixelIndex + 2] = finalPixel;
+                            }
+                        }
+                    }
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function clampColor(value) {
+            return Math.max(0, Math.min(255, value));
+        }
+
+        function createDitherMatrix(level) {
+            switch (level) {
+                case 8:
+                    return [[1, 0, 1 / 8], [0, 1, 1 / 8], [1, 1, 1 / 8], [-1, 1, 1 / 8], [1, -1, 1 / 8], [-1, -1, 1 / 8], [2, 0, 1 / 8], [0, 2, 1 / 8]];
+                case 16:
+                    return [[1, 0, 1 / 16], [0, 1, 1 / 16], [1, 1, 1 / 16], [-1, 1, 1 / 16], [1, -1, 1 / 16], [-1, -1, 1 / 16], [2, 0, 1 / 16], [0, 2, 1 / 16], [-2, 0, 1 / 16], [0, -2, 1 / 16], [2, 2, 1 / 16], [-2, 2, 1 / 16], [2, -2, 1 / 16], [-2, -2, 1 / 16]];
+                case 24:
+                    return [[1, 0, 1 / 24], [0, 1, 1 / 24], [1, 1, 1 / 24], [-1, 1, 1 / 24], [1, -1, 1 / 24], [-1, -1, 1 / 24], [2, 0, 1 / 24], [0, 2, 1 / 24], [-2, 0, 1 / 24], [0, -2, 1 / 24], [2, 2, 1 / 24], [-2, 2, 1 / 24], [2, -2, 1 / 24], [-2, -2, 1 / 24], [3, 0, 1 / 24], [0, 3, 1 / 24], [-3, 0, 1 / 24], [0, -3, 1 / 24], [3, 3, 1 / 24], [-3, 3, 1 / 24], [3, -3, 1 / 24], [-3, -3, 1 / 24]];
+                case 32:
+                    return [[1, 0, 1 / 32], [0, 1, 1 / 32], [1, 1, 1 / 32], [-1, 1, 1 / 32], [1, -1, 1 / 32], [-1, -1, 1 / 32], [2, 0, 1 / 32], [0, 2, 1 / 32], [-2, 0, 1 / 32], [0, -2, 1 / 32], [2, 2, 1 / 32], [-2, 2, 1 / 32], [2, -2, 1 / 32], [-2, -2, 1 / 32], [3, 0, 1 / 32], [0, 3, 1 / 32], [-3, 0, 1 / 32], [0, -3, 1 / 32], [3, 3, 1 / 32], [-3, 3, 1 / 32], [3, -3, 1 / 32], [-3, -3, 1 / 32], [4, 0, 1 / 32], [0, 4, 1 / 32], [-4, 0, 1 / 32], [0, -4, 1 / 32], [4, 4, 1 / 32], [-4, 4, 1 / 32], [4, -4, 1 / 32], [-4, -4, 1 / 32]];
+                default:
+                    return [[1, 0, 1 / 8], [0, 1, 1 / 8], [1, 1, 1 / 8], [-1, 1, 1 / 8], [1, -1, 1 / 8], [-1, -1, 1 / 8], [2, 0, 1 / 8], [0, 2, 1 / 8]];
+            }
+        }
+    </script>
+</body>
+</html>
